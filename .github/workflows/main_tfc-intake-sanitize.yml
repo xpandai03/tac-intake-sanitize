@@ -1,64 +1,43 @@
-name: Build and deploy Python project to Azure Function App - tfc-intake-sanitize
+name: Build & deploy Python Azure Function
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
-env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.'   # path to function code
-  PYTHON_VERSION: '3.11'                # python version to use
-
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read                    # required for actions/checkout
-
     steps:
-      - name: Checkout repository
+      # 1. Get your code
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Create and activate virtual environment
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Zip function package
-        run: |
-          zip -r function.zip . -x ".git/*" -x ".venv/*"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: function-package
-          path: function.zip
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download package artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: function-package
-
-      - name: Login to Azure
+      # 2. Log in to Azure using the SP
+      - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Azure Function App via ZIP
+      # 3. Set up Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 4. Install dependencies
+      - name: Install requirements
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -r requirements.txt
+
+      # 5. Zip up your function
+      - name: Pack function
+        run: zip -r function.zip . -x ".git/*" -x ".venv/*"
+
+      # 6. Deploy via Azure CLI
+      - name: Deploy to Azure Function
         run: |
           az functionapp deployment source config-zip \
             --resource-group tfc-intake-functions \
